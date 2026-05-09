@@ -17,14 +17,15 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Guard: missing app secret → reject cleanly rather than throw
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) return new NextResponse('Forbidden', { status: 403 })
+
   // Verify Meta HMAC-SHA256 signature to reject spoofed payloads
   const rawBody = await req.text()
   const sig = req.headers.get('x-hub-signature-256') ?? ''
   const expected =
-    'sha256=' +
-    createHmac('sha256', process.env.WHATSAPP_APP_SECRET!)
-      .update(rawBody)
-      .digest('hex')
+    'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex')
   if (sig !== expected) {
     return new NextResponse('Forbidden', { status: 403 })
   }
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Load or create conversation record
-  const { data: conv } = await supabase
+  const { data: conv, error: convError } = await supabase
     .from('conversations')
     .upsert(
       { clinic_id: clinic.id, customer_phone: from },
@@ -56,8 +57,13 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
+  if (convError || !conv) {
+    console.error('conversations upsert failed:', convError)
+    return NextResponse.json({ status: 'db_error' }, { status: 500 })
+  }
+
   const history = (
-    (conv?.context as { history?: Array<{ role: 'user' | 'assistant'; content: string }> })
+    (conv.context as { history?: Array<{ role: 'user' | 'assistant'; content: string }> })
       ?.history ?? []
   )
 
@@ -86,7 +92,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: 'claude_error' })
   }
 
-  // Keep last 20 turns to stay within context budget
+  // Keep last 20 individual messages (10 exchange pairs) within context budget
   const updatedHistory = [
     ...history,
     { role: 'user' as const, content: text },
@@ -99,9 +105,9 @@ export async function POST(req: NextRequest) {
       context: { history: updatedHistory },
       updated_at: new Date().toISOString(),
     })
-    .eq('id', conv?.id)
+    .eq('id', conv.id)
 
-  // Handle booking
+  // Handle booking — audit only after confirming booking row was inserted
   if (result.action === 'book_appointment' && result.bookingDetails) {
     const { customerName, service, requestedTime } = result.bookingDetails
 
@@ -112,7 +118,7 @@ export async function POST(req: NextRequest) {
       appointmentDt = new Date().toISOString()
     }
 
-    await supabase.from('bookings').insert({
+    const { error: bookingError } = await supabase.from('bookings').insert({
       clinic_id: clinic.id,
       customer_phone: from,
       customer_name: customerName,
@@ -120,21 +126,24 @@ export async function POST(req: NextRequest) {
       appointment_dt: appointmentDt,
     })
 
-    await supabase.from('audit_log').insert({
-      clinic_id: clinic.id,
-      event: 'booking_created',
-      actor: 'whatsapp_webhook',
-      detail: { customer_phone: from, service, requestedTime },
-    })
+    if (!bookingError) {
+      // Audit only after confirmed booking write
+      await supabase.from('audit_log').insert({
+        clinic_id: clinic.id,
+        event: 'booking_created',
+        actor: 'whatsapp_webhook',
+        detail: { customer_phone: from, service, requestedTime },
+      })
 
-    // Notify clinic owner
-    await sendWhatsAppMessage(
-      phoneNumberId,
-      clinic.owner_whatsapp as string,
-      `New booking at ${clinic.name}:\nPatient: ${customerName}\nService: ${service}\nTime: ${requestedTime}\nPhone: ${from}`
-    ).catch(() => {
-      // Non-fatal: patient message already sent
-    })
+      // Notify clinic owner — non-fatal if this fails
+      await sendWhatsAppMessage(
+        phoneNumberId,
+        clinic.owner_whatsapp as string,
+        `New booking at ${clinic.name}:\nPatient: ${customerName}\nService: ${service}\nTime: ${requestedTime}\nPhone: ${from}`
+      ).catch(() => undefined)
+    } else {
+      console.error('bookings insert failed:', bookingError)
+    }
   }
 
   await sendWhatsAppMessage(phoneNumberId, from, result.reply)
