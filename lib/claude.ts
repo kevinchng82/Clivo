@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? '')
 
 export interface ClinicContext {
   clinicName: string
@@ -45,19 +45,20 @@ ESCALATE
 
 Keep replies short and friendly. Use simple English. This is WhatsApp — no markdown.`
 
-  const messages = [
-    ...conversationHistory,
-    { role: 'user' as const, content: customerMessage },
-  ]
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 500,
-    system: systemPrompt,
-    messages,
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: systemPrompt,
   })
 
-  const replyText = response.content[0]?.type === 'text' ? response.content[0].text : ''
+  // Gemini uses 'model' instead of 'assistant' for role
+  const history = conversationHistory.map(m => ({
+    role: m.role === 'assistant' ? 'model' as const : 'user' as const,
+    parts: [{ text: m.content }],
+  }))
+
+  const chat = model.startChat({ history })
+  const result = await chat.sendMessage(customerMessage)
+  const replyText = result.response.text()
 
   if (replyText.includes('BOOKING_READY|')) {
     const parts = replyText.split('|')
