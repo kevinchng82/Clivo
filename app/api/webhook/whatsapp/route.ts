@@ -3,6 +3,7 @@ import { createHmac } from 'crypto'
 import { supabase } from '@/lib/supabase'
 import { sendWhatsAppMessage, extractMessageData } from '@/lib/whatsapp'
 import { processMessage } from '@/lib/claude'
+import { isRateLimited } from '@/lib/rateLimit'
 
 // GET: Meta webhook verification handshake
 export async function GET(req: NextRequest) {
@@ -35,6 +36,10 @@ export async function POST(req: NextRequest) {
   if (!msg) return NextResponse.json({ status: 'ignored' })
 
   const { from, text, phoneNumberId } = msg
+
+  if (isRateLimited(from)) {
+    return NextResponse.json({ status: 'rate_limited' })
+  }
 
   // Find clinic by WhatsApp phone number ID
   const { data: clinic } = await supabase
