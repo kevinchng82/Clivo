@@ -1,0 +1,142 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createHmac } from 'crypto'
+import { supabase } from '@/lib/supabase'
+import { sendWhatsAppMessage, extractMessageData } from '@/lib/whatsapp'
+import { processMessage } from '@/lib/claude'
+
+// GET: Meta webhook verification handshake
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const mode = searchParams.get('hub.mode')
+  const token = searchParams.get('hub.verify_token')
+  const challenge = searchParams.get('hub.challenge')
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new NextResponse(challenge, { status: 200 })
+  }
+  return new NextResponse('Forbidden', { status: 403 })
+}
+
+export async function POST(req: NextRequest) {
+  // Verify Meta HMAC-SHA256 signature to reject spoofed payloads
+  const rawBody = await req.text()
+  const sig = req.headers.get('x-hub-signature-256') ?? ''
+  const expected =
+    'sha256=' +
+    createHmac('sha256', process.env.WHATSAPP_APP_SECRET!)
+      .update(rawBody)
+      .digest('hex')
+  if (sig !== expected) {
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+
+  const body = JSON.parse(rawBody) as unknown
+  const msg = extractMessageData(body)
+  if (!msg) return NextResponse.json({ status: 'ignored' })
+
+  const { from, text, phoneNumberId } = msg
+
+  // Find clinic by WhatsApp phone number ID
+  const { data: clinic } = await supabase
+    .from('clinics')
+    .select('*, clinic_settings(*)')
+    .eq('whatsapp_phone_number_id', phoneNumberId)
+    .single()
+
+  if (!clinic || clinic.subscription_status === 'cancelled') {
+    return NextResponse.json({ status: 'no_clinic' })
+  }
+
+  // Load or create conversation record
+  const { data: conv } = await supabase
+    .from('conversations')
+    .upsert(
+      { clinic_id: clinic.id, customer_phone: from },
+      { onConflict: 'clinic_id,customer_phone' }
+    )
+    .select()
+    .single()
+
+  const history = (
+    (conv?.context as { history?: Array<{ role: 'user' | 'assistant'; content: string }> })
+      ?.history ?? []
+  )
+
+  const settings = clinic.clinic_settings as {
+    business_hours: Record<string, string>
+    services: string[]
+    faqs: Array<{ question: string; answer: string }>
+  } | null
+
+  const context = {
+    clinicName: clinic.name as string,
+    businessHours: settings?.business_hours ?? {},
+    services: settings?.services ?? [],
+    faqs: settings?.faqs ?? [],
+  }
+
+  let result
+  try {
+    result = await processMessage(text, history, context)
+  } catch {
+    await sendWhatsAppMessage(
+      phoneNumberId,
+      from,
+      'Sorry, I am having trouble right now. Please try again shortly.'
+    )
+    return NextResponse.json({ status: 'claude_error' })
+  }
+
+  // Keep last 20 turns to stay within context budget
+  const updatedHistory = [
+    ...history,
+    { role: 'user' as const, content: text },
+    { role: 'assistant' as const, content: result.reply },
+  ].slice(-20)
+
+  await supabase
+    .from('conversations')
+    .update({
+      context: { history: updatedHistory },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conv?.id)
+
+  // Handle booking
+  if (result.action === 'book_appointment' && result.bookingDetails) {
+    const { customerName, service, requestedTime } = result.bookingDetails
+
+    let appointmentDt: string
+    try {
+      appointmentDt = new Date(requestedTime).toISOString()
+    } catch {
+      appointmentDt = new Date().toISOString()
+    }
+
+    await supabase.from('bookings').insert({
+      clinic_id: clinic.id,
+      customer_phone: from,
+      customer_name: customerName,
+      service,
+      appointment_dt: appointmentDt,
+    })
+
+    await supabase.from('audit_log').insert({
+      clinic_id: clinic.id,
+      event: 'booking_created',
+      actor: 'whatsapp_webhook',
+      detail: { customer_phone: from, service, requestedTime },
+    })
+
+    // Notify clinic owner
+    await sendWhatsAppMessage(
+      phoneNumberId,
+      clinic.owner_whatsapp as string,
+      `New booking at ${clinic.name}:\nPatient: ${customerName}\nService: ${service}\nTime: ${requestedTime}\nPhone: ${from}`
+    ).catch(() => {
+      // Non-fatal: patient message already sent
+    })
+  }
+
+  await sendWhatsAppMessage(phoneNumberId, from, result.reply)
+  return NextResponse.json({ status: 'ok' })
+}
