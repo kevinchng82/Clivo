@@ -57,7 +57,7 @@ Keep replies short and friendly. Use simple English. This is WhatsApp — no mar
     messages,
   })
 
-  const replyText = response.content[0].type === 'text' ? response.content[0].text : ''
+  const replyText = response.content[0]?.type === 'text' ? response.content[0].text : ''
 
   if (replyText.includes('BOOKING_READY|')) {
     const parts = replyText.split('|')
@@ -72,7 +72,7 @@ Keep replies short and friendly. Use simple English. This is WhatsApp — no mar
     }
   }
 
-  if (replyText.includes('ESCALATE')) {
+  if (replyText.trimEnd().endsWith('ESCALATE')) {
     return {
       reply: replyText.replace('ESCALATE', '').trim() || 'Our staff will follow up with you shortly.',
       action: 'escalate',
