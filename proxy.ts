@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getSessionForProxy } from '@/lib/session'
 
-export function proxy(req: NextRequest) {
+const SESSION_COOKIE = 'clivo_session'
+
+const protectedRoutes = ['/dashboard']
+const publicRoutes = ['/login', '/signup', '/']
+
+export default async function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname
+  const isProtectedRoute = protectedRoutes.some(r => path === r || path.startsWith(r + '/'))
+  const isPublicRoute = publicRoutes.includes(path)
+
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  const session = await getSessionForProxy(token)
+
+  // Unauthenticated user hitting a protected route → send to login
+  if (isProtectedRoute && !session) {
+    return NextResponse.redirect(new URL('/login', req.nextUrl))
+  }
+
+  // Authenticated user hitting /login → send to dashboard
+  if (isPublicRoute && session && path === '/login') {
+    return NextResponse.redirect(new URL('/dashboard', req.nextUrl))
+  }
+
   const res = NextResponse.next()
   res.headers.set('X-Content-Type-Options', 'nosniff')
   res.headers.set('X-Frame-Options', 'DENY')
@@ -14,5 +37,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: '/((?!_next/static|_next/image|favicon.ico).*)',
+  matcher: '/((?!api|_next/static|_next/image|favicon.ico).*)',
 }

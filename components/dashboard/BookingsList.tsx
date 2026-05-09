@@ -10,17 +10,17 @@ interface Booking {
   status: string
 }
 
-export default function BookingsList({ clinicId }: { clinicId: string }) {
+export default function BookingsList({ clinicId: _clinicId }: { clinicId: string }) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/bookings?clinicId=${clinicId}`)
+    fetch('/api/bookings')
       .then(r => r.json())
       .then(d => setBookings(d.bookings || []))
       .catch(() => setBookings([]))
       .finally(() => setLoading(false))
-  }, [clinicId])
+  }, [])
 
   if (loading) return <p className="text-gray-500">Loading bookings...</p>
   if (!bookings.length) return <p className="text-gray-500">No bookings yet. Once patients message your clinic WhatsApp, bookings will appear here.</p>

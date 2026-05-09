@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { verifySession } from '@/lib/session'
 
-export async function GET(req: NextRequest) {
-  const clinicId = req.nextUrl.searchParams.get('clinicId')
-  if (!clinicId) return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 })
+export async function GET() {
+  const { clinicId } = await verifySession()
 
   const { data: bookings, error } = await supabase
     .from('bookings')

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { verifySession } from '@/lib/session'
 
 export async function POST(req: NextRequest) {
-  const { clinicId, faqs } = await req.json()
-  if (!clinicId) return NextResponse.json({ error: 'Missing clinicId' }, { status: 400 })
+  const { clinicId } = await verifySession()
+
+  const { faqs } = await req.json()
 
   const { error } = await supabase
     .from('clinic_settings')
