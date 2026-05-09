@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
-  } catch {
+  } catch (err) {
+    console.error('Stripe webhook constructEvent failed:', err)
     return new NextResponse('Webhook signature invalid', { status: 400 })
   }
 
@@ -48,10 +49,11 @@ export async function POST(req: NextRequest) {
     const invoice = event.data.object as Stripe.Invoice
     const subId = invoice.subscription as string
     if (subId) {
-      await supabase
+      const { error } = await supabase
         .from('clinics')
         .update({ subscription_status: 'past_due' })
         .eq('stripe_subscription_id', subId)
+      if (error) console.error('Failed to mark clinic past_due:', error)
     }
   }
 
