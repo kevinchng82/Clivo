@@ -25,11 +25,12 @@ export default function FaqEditor({ clinicId, initial }: { clinicId: string; ini
   async function save() {
     setSaving(true)
     try {
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clinicId, faqs }),
       })
+      if (!res.ok) throw new Error('Server error')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch {
