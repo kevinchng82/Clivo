@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
 
   if (event.type === 'invoice.payment_failed') {
     const invoice = event.data.object as Stripe.Invoice
-    const subId = invoice.subscription as string
+    const subId = (invoice.parent as { subscription_details?: { subscription?: string } } | null)
+      ?.subscription_details?.subscription
     if (subId) {
       const { error } = await supabase
         .from('clinics')
