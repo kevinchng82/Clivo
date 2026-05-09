@@ -11,19 +11,28 @@ export default function Pricing() {
       alert('Please agree to the data privacy terms to continue.')
       return
     }
-    setLoading(true)
-    const res = await fetch('/api/onboard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-    const { checkoutUrl, error } = await res.json()
-    if (error) {
-      alert(error)
-      setLoading(false)
+    if (!/^\d{10,15}$/.test(form.whatsapp)) {
+      alert('Please enter a valid WhatsApp number (digits only, e.g. 6591234567).')
       return
     }
-    window.location.href = checkoutUrl
+    setLoading(true)
+    try {
+      const res = await fetch('/api/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const { checkoutUrl, error } = await res.json()
+      if (error) {
+        alert(error)
+        return
+      }
+      window.location.href = checkoutUrl
+    } catch {
+      alert('Network error. Please check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

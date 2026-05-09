@@ -26,7 +26,11 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 })
+    // Postgres unique violation — don't leak internal constraint names
+    const msg = error.code === '23505'
+      ? 'An account with this email already exists.'
+      : 'Registration failed. Please try again.'
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 
   await supabase.from('clinic_settings').insert({ clinic_id: clinic.id })
