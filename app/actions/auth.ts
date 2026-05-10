@@ -1,5 +1,6 @@
 'use server'
 import { redirect } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { createSession, deleteSession } from '@/lib/session'
 
@@ -15,26 +16,18 @@ export async function login(_prev: LoginState | undefined, formData: FormData): 
     return { error: 'Email and password are required.' }
   }
 
-  // Look up clinic by owner email
-  const { data: clinic, error: clinicError } = await supabase
-    .from('clinics')
-    .select('id, owner_email')
-    .eq('owner_email', email)
-    .single()
-
-  if (clinicError || !clinic) {
-    return { error: 'Invalid email or password.' }
-  }
-
-  // Verify password against Supabase Auth (anon key path)
-  const { createClient } = await import('@supabase/supabase-js')
+  // H-05: run both checks always — prevents timing-based email enumeration
   const anonClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
-  const { error: authError } = await anonClient.auth.signInWithPassword({ email, password })
 
-  if (authError) {
+  const [{ data: clinic }, { error: authError }] = await Promise.all([
+    supabase.from('clinics').select('id').eq('owner_email', email).single(),
+    anonClient.auth.signInWithPassword({ email, password }),
+  ])
+
+  if (!clinic || authError) {
     return { error: 'Invalid email or password.' }
   }
 

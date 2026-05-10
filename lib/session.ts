@@ -5,12 +5,12 @@ import { redirect } from 'next/navigation'
 import { cache } from 'react'
 
 const SESSION_COOKIE = 'clivo_session'
-const encodedKey = new TextEncoder().encode(process.env.SESSION_SECRET ?? 'fallback-dev-secret-change-in-prod')
+if (!process.env.SESSION_SECRET) throw new Error('SESSION_SECRET environment variable is not set')
+const encodedKey = new TextEncoder().encode(process.env.SESSION_SECRET)
 
 export interface SessionPayload {
   clinicId: string
   email: string
-  expiresAt: string
 }
 
 async function encrypt(payload: SessionPayload) {
@@ -32,7 +32,7 @@ async function decrypt(token: string): Promise<SessionPayload | null> {
 
 export async function createSession(clinicId: string, email: string) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-  const token = await encrypt({ clinicId, email, expiresAt: expiresAt.toISOString() })
+  const token = await encrypt({ clinicId, email })
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,

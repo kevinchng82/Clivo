@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session
     const clinicId = session.metadata?.clinicId
     if (clinicId) {
+      // M-07: idempotency guard — only activate if not already active
       const { error } = await supabase
         .from('clinics')
         .update({
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
           subscription_status: 'active',
         })
         .eq('id', clinicId)
+        .neq('subscription_status', 'active')
       if (error) console.error('Failed to activate clinic:', error)
     }
   }

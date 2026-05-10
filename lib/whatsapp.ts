@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const BASE_URL = 'https://graph.facebook.com/v18.0'
+const BASE_URL = `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION ?? 'v21.0'}`
 
 export async function sendWhatsAppMessage(
   phoneNumberId: string,

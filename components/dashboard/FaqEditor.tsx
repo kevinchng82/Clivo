@@ -28,7 +28,7 @@ export default function FaqEditor({ clinicId, initial }: { clinicId: string; ini
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clinicId, faqs }),
+        body: JSON.stringify({ faqs }),
       })
       if (!res.ok) throw new Error('Server error')
       setSaved(true)

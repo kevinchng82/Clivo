@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { supabase } from '@/lib/supabase'
 import { sendWhatsAppMessage, extractMessageData } from '@/lib/whatsapp'
 import { processMessage } from '@/lib/claude'
@@ -18,18 +18,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Guard: missing app secret → reject cleanly rather than throw
   const appSecret = process.env.WHATSAPP_APP_SECRET
   if (!appSecret) return new NextResponse('Forbidden', { status: 403 })
 
-  // Verify Meta HMAC-SHA256 signature to reject spoofed payloads
   const rawBody = await req.text()
   const sig = req.headers.get('x-hub-signature-256') ?? ''
-  const expected =
-    'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex')
-  if (sig !== expected) {
-    return new NextResponse('Forbidden', { status: 403 })
-  }
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex')
+
+  // H-03: timing-safe comparison to prevent HMAC oracle attacks
+  const sigBuf = Buffer.from(sig)
+  const expectedBuf = Buffer.from(expected)
+  const valid = sigBuf.length === expectedBuf.length && timingSafeEqual(sigBuf, expectedBuf)
+  if (!valid) return new NextResponse('Forbidden', { status: 403 })
 
   const body = JSON.parse(rawBody) as unknown
   const msg = extractMessageData(body)
@@ -72,7 +72,11 @@ export async function POST(req: NextRequest) {
       ?.history ?? []
   )
 
-  const settings = clinic.clinic_settings as {
+  // M-04: clinic_settings join returns an array — take first element defensively
+  const settingsRaw = Array.isArray(clinic.clinic_settings)
+    ? clinic.clinic_settings[0]
+    : clinic.clinic_settings
+  const settings = settingsRaw as {
     business_hours: Record<string, string>
     services: string[]
     faqs: Array<{ question: string; answer: string }>
@@ -93,8 +97,8 @@ export async function POST(req: NextRequest) {
       phoneNumberId,
       from,
       'Sorry, I am having trouble right now. Please try again shortly.'
-    )
-    return NextResponse.json({ status: 'claude_error' })
+    ).catch(() => undefined)
+    return NextResponse.json({ status: 'ai_error' })
   }
 
   // Keep last 20 individual messages (10 exchange pairs) within context budget
@@ -112,16 +116,23 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', conv.id)
 
-  // Handle booking — audit only after confirming booking row was inserted
+  // Handle booking
   if (result.action === 'book_appointment' && result.bookingDetails) {
     const { customerName, service, requestedTime } = result.bookingDetails
 
-    let appointmentDt: string
-    try {
-      appointmentDt = new Date(requestedTime).toISOString()
-    } catch {
-      appointmentDt = new Date().toISOString()
+    // H-04: reject unparseable dates instead of silently using current time
+    const parsedDate = new Date(requestedTime)
+    if (isNaN(parsedDate.getTime())) {
+      console.error('Invalid requestedTime from AI:', requestedTime)
+      await sendWhatsAppMessage(
+        phoneNumberId,
+        from,
+        'Could you please confirm the exact date and time you would like? For example: "Thursday 3pm" or "15 May at 10am".'
+      ).catch(() => undefined)
+      return NextResponse.json({ status: 'ok' })
     }
+
+    const appointmentDt = parsedDate.toISOString()
 
     const { error: bookingError } = await supabase.from('bookings').insert({
       clinic_id: clinic.id,
@@ -132,7 +143,6 @@ export async function POST(req: NextRequest) {
     })
 
     if (!bookingError) {
-      // Audit only after confirmed booking write
       await supabase.from('audit_log').insert({
         clinic_id: clinic.id,
         event: 'booking_created',
@@ -140,7 +150,6 @@ export async function POST(req: NextRequest) {
         detail: { customer_phone: from, service, requestedTime },
       })
 
-      // Notify clinic owner — non-fatal if this fails
       await sendWhatsAppMessage(
         phoneNumberId,
         clinic.owner_whatsapp as string,
@@ -151,6 +160,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await sendWhatsAppMessage(phoneNumberId, from, result.reply)
+  // M-06: catch patient reply failure — return 200 so Meta doesn't retry and double-process
+  try {
+    await sendWhatsAppMessage(phoneNumberId, from, result.reply)
+  } catch (err) {
+    console.error('Failed to send WhatsApp reply to patient:', err)
+  }
   return NextResponse.json({ status: 'ok' })
 }
