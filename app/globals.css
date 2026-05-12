@@ -1,26 +1,182 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --cream: #FAF6EF;
+  --cream-dark: #F2EBE0;
+  --cream-border: #E8DDD0;
+  --forest: #1A3C2E;
+  --forest-mid: #2D5E46;
+  --forest-light: #3D7A5C;
+  --gold: #C9A84C;
+  --gold-light: #E8C97A;
+  --gold-pale: #F5EDCF;
+  --ink: #0F1F15;
+  --ink-mid: #2A3D30;
+  --muted: #7A8C7F;
+  --muted-light: #A8B8AC;
+
+  --background: var(--cream);
+  --foreground: var(--ink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: 'Cormorant Garamond', serif;
+}
+
+/* Grain overlay for warmth */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 128px;
+}
+
+/* Clivo ornament line */
+.ornament {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--gold);
+}
+.ornament::before,
+.ornament::after {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 1px;
+  background: var(--gold);
+  opacity: 0.6;
+}
+
+/* Animated AI pulse dot */
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.4); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.ai-pulse {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-pulse::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--forest-light);
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+/* Fade-up animation */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.7s ease forwards;
+}
+.animate-fade-up-delay-1 { animation-delay: 0.1s; opacity: 0; animation-fill-mode: forwards; animation-name: fade-up; animation-duration: 0.7s; animation-timing-function: ease; }
+.animate-fade-up-delay-2 { animation-delay: 0.2s; opacity: 0; animation-fill-mode: forwards; animation-name: fade-up; animation-duration: 0.7s; animation-timing-function: ease; }
+.animate-fade-up-delay-3 { animation-delay: 0.35s; opacity: 0; animation-fill-mode: forwards; animation-name: fade-up; animation-duration: 0.7s; animation-timing-function: ease; }
+.animate-fade-up-delay-4 { animation-delay: 0.5s; opacity: 0; animation-fill-mode: forwards; animation-name: fade-up; animation-duration: 0.7s; animation-timing-function: ease; }
+
+/* Hover underline effect */
+.hover-underline {
+  position: relative;
+}
+.hover-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--gold);
+  transition: width 0.3s ease;
+}
+.hover-underline:hover::after {
+  width: 100%;
+}
+
+/* Gold button */
+.btn-gold {
+  background: var(--forest);
+  color: var(--gold-light);
+  border: 1px solid var(--forest-mid);
+  padding: 14px 32px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-gold:hover {
+  background: var(--forest-mid);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+/* Card style */
+.card-warm {
+  background: white;
+  border: 1px solid var(--cream-border);
+  border-radius: 2px;
+  padding: 32px;
+}
+
+/* Input style */
+.input-warm {
+  width: 100%;
+  background: var(--cream);
+  border: 1px solid var(--cream-border);
+  border-radius: 2px;
+  padding: 12px 16px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.input-warm:focus {
+  border-color: var(--forest-light);
+}
+.input-warm::placeholder {
+  color: var(--muted-light);
 }

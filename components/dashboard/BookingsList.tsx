@@ -22,19 +22,107 @@ export default function BookingsList({ clinicId: _clinicId }: { clinicId: string
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <p className="text-gray-500">Loading bookings...</p>
-  if (!bookings.length) return <p className="text-gray-500">No bookings yet. Once patients message your clinic WhatsApp, bookings will appear here.</p>
+  if (loading) {
+    return (
+      <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--muted)', fontSize: '0.9rem', fontWeight: 300 }}>
+        Loading bookings…
+      </div>
+    )
+  }
+
+  if (!bookings.length) {
+    return (
+      <div
+        style={{
+          padding: '60px 40px',
+          textAlign: 'center',
+          background: 'white',
+          border: '1px solid var(--cream-border)',
+          borderRadius: '2px',
+        }}
+      >
+        <div className="font-display" style={{ fontSize: '1.5rem', color: 'var(--forest)', fontWeight: 400, marginBottom: '10px' }}>
+          No bookings yet
+        </div>
+        <p style={{ color: 'var(--muted)', fontSize: '0.88rem', fontWeight: 300, maxWidth: '320px', margin: '0 auto', lineHeight: 1.7 }}>
+          Once patients message your clinic WhatsApp, bookings will appear here automatically.
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-3">
-      {bookings.map(b => (
-        <div key={b.id} className="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center">
-          <div>
-            <p className="font-semibold text-gray-900">{b.customer_name || 'Unknown'}</p>
-            <p className="text-gray-500 text-sm">{b.service} — {new Date(b.appointment_dt).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</p>
-            <p className="text-gray-400 text-sm">{b.customer_phone}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', border: '1px solid var(--cream-border)' }}>
+      {bookings.map((b, i) => (
+        <div
+          key={b.id}
+          style={{
+            background: 'white',
+            padding: '20px 24px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderBottom: i < bookings.length - 1 ? '1px solid var(--cream-border)' : 'none',
+            transition: 'background 0.2s ease',
+            cursor: 'default',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--cream)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            {/* Avatar initials */}
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '2px',
+                background: 'var(--gold-pale)',
+                border: '1px solid var(--cream-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                className="font-display"
+                style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--forest)', lineHeight: 1 }}
+              >
+                {(b.customer_name || 'U').charAt(0).toUpperCase()}
+              </span>
+            </div>
+
+            <div>
+              <p style={{ fontWeight: 500, color: 'var(--ink)', fontSize: '0.92rem', marginBottom: '3px' }}>
+                {b.customer_name || 'Unknown patient'}
+              </p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.8rem', fontWeight: 300 }}>
+                {b.service}
+                <span style={{ margin: '0 8px', color: 'var(--cream-border)' }}>·</span>
+                {new Date(b.appointment_dt).toLocaleString('en-SG', {
+                  timeZone: 'Asia/Singapore',
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              </p>
+              <p style={{ color: 'var(--muted-light)', fontSize: '0.75rem', marginTop: '2px' }}>{b.customer_phone}</p>
+            </div>
           </div>
-          <span className="bg-green-100 text-green-700 text-sm px-3 py-1 rounded-full">{b.status}</span>
+
+          <span
+            style={{
+              background: 'rgba(26,60,46,0.08)',
+              color: 'var(--forest-mid)',
+              fontSize: '0.7rem',
+              padding: '5px 12px',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              border: '1px solid rgba(26,60,46,0.15)',
+              fontWeight: 500,
+            }}
+          >
+            {b.status}
+          </span>
         </div>
       ))}
     </div>
