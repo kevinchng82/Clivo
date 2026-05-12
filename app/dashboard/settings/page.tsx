@@ -1,20 +1,38 @@
-export default function SettingsPage() {
+import { supabase } from '@/lib/supabase'
+import { verifySession } from '@/lib/session'
+import ClinicSettingsForm from '@/components/dashboard/ClinicSettingsForm'
+
+export default async function SettingsPage() {
+  const { clinicId } = await verifySession()
+
+  const [{ data: clinic }, { data: settings }] = await Promise.all([
+    supabase.from('clinics').select('name, owner_whatsapp, whatsapp_phone_number_id').eq('id', clinicId).single(),
+    supabase.from('clinic_settings').select('business_hours, services').eq('clinic_id', clinicId).single(),
+  ])
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Settings</h1>
-
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 mb-8">
-        <p className="font-semibold mb-1">Your PDPA obligations as a clinic operator (Singapore)</p>
-        <ul className="list-disc list-inside space-y-1">
-          <li>Inform your patients that their WhatsApp messages are processed by an AI assistant</li>
-          <li>Include a privacy notice on your clinic website or at reception</li>
-          <li>You may not use patient data for any purpose other than appointment management</li>
-          <li>Patients may request access to or deletion of their data — contact support@clivo.app to action this</li>
-          <li>Notify PDPC and affected patients within 3 days of any data breach</li>
-        </ul>
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ fontSize: '0.7rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--gold)', marginBottom: '8px' }}>
+          Dashboard
+        </div>
+        <h1 className="font-display" style={{ fontSize: '2.2rem', fontWeight: 400, color: 'var(--forest)', lineHeight: 1.1 }}>
+          Settings
+        </h1>
+        <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginTop: '6px', fontWeight: 300 }}>
+          Configure your clinic information, hours, and services
+        </p>
       </div>
 
-      <p className="text-gray-500 text-sm">More settings (clinic hours, services, WhatsApp number ID) coming in the next release.</p>
+      <ClinicSettingsForm
+        initial={{
+          clinicName: clinic?.name ?? '',
+          ownerWhatsapp: clinic?.owner_whatsapp ?? '',
+          whatsappPhoneNumberId: clinic?.whatsapp_phone_number_id ?? '',
+          businessHours: (settings?.business_hours as Record<string, string>) ?? {},
+          services: (settings?.services as string[]) ?? [],
+        }}
+      />
     </div>
   )
 }
